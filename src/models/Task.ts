@@ -6,8 +6,7 @@ const taskSchema = new Schema<ITask>(
     title: {
       type: String,
       required: true,
-      trim: true,
-      index: true // Index for text search
+      trim: true
     },
     description: {
       type: String,
@@ -16,18 +15,15 @@ const taskSchema = new Schema<ITask>(
     columnId: {
       type: Schema.Types.ObjectId,
       ref: 'Column',
-      required: true,
-      index: true // Index for faster querying tasks by column
+      required: true
     },
     order: {
       type: Number,
-      required: true,
-      index: true // Index for sorting tasks within a column
+      required: true
     },
     createdAt: {
       type: Date,
-      default: Date.now,
-      index: true // Index for sorting by creation date
+      default: Date.now
     },
     updatedAt: {
       type: Date,
@@ -35,12 +31,12 @@ const taskSchema = new Schema<ITask>(
     }
   },
   {
-    timestamps: true, // Automatically manage createdAt and updatedAt
-    versionKey: false // Disable the version key
+    timestamps: true,
+    versionKey: false
   }
 );
 
-// Compound index for columnId and order for efficient sorting within columns
+// Compound index for efficient sorting within columns
 taskSchema.index({ columnId: 1, order: 1 }, { unique: true });
 
 // Text index for search functionality
