@@ -6,18 +6,15 @@ const columnSchema = new Schema<IColumn>(
     title: {
       type: String,
       required: true,
-      trim: true,
-      index: true // Index for faster querying by title
+      trim: true
     },
     order: {
       type: Number,
-      required: true,
-      index: true // Index for sorting columns
+      required: true
     },
     createdAt: {
       type: Date,
-      default: Date.now,
-      index: true // Index for sorting by creation date
+      default: Date.now
     },
     updatedAt: {
       type: Date,
@@ -25,12 +22,12 @@ const columnSchema = new Schema<IColumn>(
     }
   },
   {
-    timestamps: true, // Automatically manage createdAt and updatedAt
-    versionKey: false // Disable the version key
+    timestamps: true,
+    versionKey: false
   }
 );
 
-// Compound index for order and title
+// Compound index for ordering and uniqueness
 columnSchema.index({ order: 1, title: 1 }, { unique: true });
 
 export const Column = mongoose.model<IColumn>('Column', columnSchema);
