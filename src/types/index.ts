@@ -68,12 +68,8 @@ export interface IRequestQuery extends IPaginationQuery {
 export interface IRequestBody {
   [key: string]: unknown;
 }
-
-// Express request extensions
-declare global {
-  namespace Express {
-    interface Request {
-      validatedData?: unknown;
-    }
+declare module 'express' {
+  interface Request {
+    validatedData?: unknown;
   }
-} 
+}
