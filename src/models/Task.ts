@@ -1,5 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import { ITask } from '../types';
+import { wsServer } from '../index';
 
 const taskSchema = new Schema<ITask>(
   {
@@ -41,6 +42,23 @@ taskSchema.index({ columnId: 1, order: 1 }, { unique: true });
 
 // Text index for search functionality
 taskSchema.index({ title: 'text', description: 'text' });
+
+// Middleware to emit WebSocket events
+taskSchema.post('save', function(doc) {
+  wsServer.broadcast('task:created', doc);
+});
+
+taskSchema.post('findOneAndUpdate', function(doc) {
+  if (doc) {
+    wsServer.broadcast('task:updated', doc);
+  }
+});
+
+taskSchema.post('findOneAndDelete', function(doc) {
+  if (doc) {
+    wsServer.broadcast('task:deleted', doc._id.toString(), doc.columnId.toString());
+  }
+});
 
 export const Task = mongoose.model<ITask>('Task', taskSchema);
 export default Task; 

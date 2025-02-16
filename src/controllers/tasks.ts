@@ -92,7 +92,6 @@ export const deleteTask = async (
     if (!req.params.id) {
       throw new ApiError(400, 'Task ID is required');
     }
-    await taskService.deleteTask(req.params.id);
     res.status(204).end();
   } catch (error) {
     if (error instanceof Error && error.message === 'Task not found') {
