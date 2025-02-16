@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
 import path from 'path';
+import { createServer } from 'http';
 
 import config from './config/config';
 import logger from './utils/logger';
@@ -14,6 +15,7 @@ import { errorConverter, errorHandler } from './middleware/error';
 import ApiError from './utils/ApiError';
 import requestLogger from './middleware/requestLogger';
 import rateLimiter from './middleware/rateLimiter';
+import WebSocketServer from './websocket/socket-server';
 
 import connectDB from './config/database';
 
@@ -21,6 +23,10 @@ import columnsRouter from './routes/columns';
 import tasksRouter from './routes/tasks';
 
 const app = express();
+const httpServer = createServer(app);
+
+// Initialize WebSocket server
+export const wsServer = new WebSocketServer(httpServer);
 
 connectDB();
 
@@ -51,6 +57,7 @@ app.use(errorConverter);
 app.use(errorHandler);
 
 const PORT = config.port;
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   logger.info(`Server is running on port ${PORT}`);
+  logger.info(`WebSocket server is ready for connections`);
 }); 
