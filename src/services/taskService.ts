@@ -163,13 +163,16 @@ class TaskService {
     return task;
   }
 
-  async deleteTask(id: string): Promise<void> {
+  async deleteTask(id: string): Promise<ITask> {
     const task = await Task.findById(id);
     if (!task) {
       throw new ApiError(404, 'Task not found');
     }
 
-    await Task.deleteOne({ _id: id });
+    // Store task info before deletion
+    const taskInfo = task.toObject();
+
+    await Task.findOneAndDelete({ _id: id });
 
     // Update order of remaining tasks in the column
     await Task.updateMany(
@@ -179,10 +182,11 @@ class TaskService {
       },
       { $inc: { order: -1 } }
     );
+
+    return taskInfo;
   }
 
   async moveTask(taskId: string, { targetColumnId, order }: ITaskMove): Promise<ITask> {
-    // Get task and validate columns
     const [task, targetColumn] = await Promise.all([
       Task.findById(taskId),
       Column.findById(targetColumnId)
@@ -219,7 +223,6 @@ class TaskService {
     task.order = order;
     await task.save();
 
-    // Return updated task with column information
     const updatedTask = await Task.findById(taskId).populate('columnId', 'title');
     if (!updatedTask) {
       throw new ApiError(500, 'Failed to update task');
