@@ -1,0 +1,123 @@
+/api/columns:
+  get:
+    tags:
+      - Columns
+    summary: Get all columns
+    description: Retrieve all columns with pagination.
+    parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
+        description: Page number
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+        description: Maximum number of columns
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '../schemas/column.yaml#/Column'
+                pagination:
+                  type: object
+                  properties:
+                    currentPage:
+                      type: integer
+                    totalPages:
+                      type: integer
+                    totalItems:
+                      type: integer
+                    itemsPerPage:
+                      type: integer
+
+  post:
+    tags:
+      - Columns
+    summary: Create a column
+    description: Create a new column.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - title
+            properties:
+              title:
+                type: string
+                minLength: 1
+                maxLength: 100
+              order:
+                type: integer
+                minimum: 0
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/column.yaml#/Column'
+
+/api/columns/{id}:
+  put:
+    tags:
+      - Columns
+    summary: Update a column
+    description: Update column details.
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        description: Column id
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+                minLength: 1
+                maxLength: 100
+              order:
+                type: integer
+                minimum: 0
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/column.yaml#/Column'
+
+  delete:
+    tags:
+      - Columns
+    summary: Delete a column
+    description: Delete a column and its associated tasks.
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        description: Column id
+    responses:
+      "204":
+        description: No content 
