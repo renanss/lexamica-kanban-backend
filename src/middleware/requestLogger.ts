@@ -7,12 +7,10 @@ interface RequestWithBody extends Request {
   body: any;
 }
 
-// Add custom tokens
 morgan.token('body', (req: RequestWithBody) => JSON.stringify(req.body));
 morgan.token('params', (req: Request) => JSON.stringify(req.params));
 morgan.token('query', (req: Request) => JSON.stringify(req.query));
 
-// Create a custom format that includes request details
 const customFormat = (tokens: morgan.TokenIndexer<Request, Response>, req: Request, res: Response): string => {
   return JSON.stringify({
     method: tokens.method(req, res),
@@ -28,7 +26,6 @@ const customFormat = (tokens: morgan.TokenIndexer<Request, Response>, req: Reque
   });
 };
 
-// Create different logging configurations for development and production
 const developmentFormat = (tokens: morgan.TokenIndexer<Request, Response>, req: Request, res: Response): string => {
   const coloredMethod = colorMethod(tokens.method(req, res));
   const coloredStatus = colorStatus(tokens.status(req, res));
@@ -40,7 +37,6 @@ const developmentFormat = (tokens: morgan.TokenIndexer<Request, Response>, req: 
   ].join(' ');
 };
 
-// Helper functions for coloring console output in development
 const colorMethod = (method: string | undefined): string => {
   const colors = {
     GET: '\x1b[32m', // green
@@ -63,7 +59,6 @@ const colorStatus = (status: string | undefined): string => {
   return status;
 };
 
-// Create the middleware based on environment
 const requestLogger = morgan(
   config.env === 'development' ? developmentFormat : customFormat,
   {
