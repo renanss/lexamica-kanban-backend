@@ -200,35 +200,151 @@ class TaskService {
       throw new ApiError(404, 'Target column not found');
     }
 
-    // Update orders in source column
-    await Task.updateMany(
-      { 
-        columnId: task.columnId,
-        order: { $gt: task.order }
-      },
-      { $inc: { order: -1 } }
-    );
+    const isMovingColumn = task.columnId.toString() !== targetColumnId;
 
-    // Update orders in target column
-    await Task.updateMany(
-      {
-        columnId: new Types.ObjectId(targetColumnId),
-        order: { $gte: order }
-      },
-      { $inc: { order: 1 } }
-    );
+    // Get all tasks in target column
+    const targetColumnTasks = await Task.find({ 
+      columnId: new Types.ObjectId(targetColumnId),
+      _id: { $ne: taskId } // Exclude the task being moved
+    }).sort({ order: 1 });
 
-    // Update the task itself
-    task.columnId = new Types.ObjectId(targetColumnId);
-    task.order = order;
-    await task.save();
-
-    const updatedTask = await Task.findById(taskId).populate('columnId', 'title');
-    if (!updatedTask) {
-      throw new ApiError(500, 'Failed to update task');
+    // Calculate new order
+    let newOrder: number;
+    if (targetColumnTasks.length === 0) {
+      // If no other tasks in target column, use a large initial order
+      newOrder = 65536; // 2^16
+    } else {
+      // Get the orders of all tasks
+      const orders = targetColumnTasks.map(t => t.order);
+      
+      if (order <= orders[0]) {
+        // Moving to start: use half of first task's order
+        newOrder = Math.max(1, Math.floor(orders[0] / 2));
+      } else if (order >= orders[orders.length - 1]) {
+        // Moving to end: add a large increment to last task's order
+        newOrder = orders[orders.length - 1] + 65536;
+      } else {
+        // Find insertion point
+        let prevOrder = 0;
+        let nextOrder = 65536;
+        for (let i = 0; i < orders.length - 1; i++) {
+          if (order >= orders[i] && order <= orders[i + 1]) {
+            prevOrder = orders[i];
+            nextOrder = orders[i + 1];
+            break;
+          }
+        }
+        // Place halfway between the two orders
+        newOrder = prevOrder + Math.floor((nextOrder - prevOrder) / 2);
+      }
     }
 
-    return updatedTask;
+    // Try to update the task with optimistic locking
+    const maxRetries = 3;
+    let retryCount = 0;
+    let updatedTask = null;
+
+    while (retryCount < maxRetries) {
+      try {
+        // Attempt to update the task atomically
+        updatedTask = await Task.findOneAndUpdate(
+          { 
+            _id: taskId,
+            $or: [
+              { order: { $ne: newOrder } }, // Only update if order is different
+              { columnId: { $ne: new Types.ObjectId(targetColumnId) } } // Or if column is different
+            ]
+          },
+          { 
+            $set: { 
+              columnId: new Types.ObjectId(targetColumnId),
+              order: newOrder
+            }
+          },
+          { 
+            new: true,
+            runValidators: true
+          }
+        );
+
+        if (updatedTask) break; // Success
+
+        // If no update occurred, try a different order
+        newOrder += Math.floor(Math.random() * 1000) + 1;
+        retryCount++;
+      } catch (error: unknown) {
+        if (error instanceof Error && 'code' in error && error.code === 11000 && retryCount < maxRetries - 1) {
+          // On duplicate key error, try a different order
+          newOrder += 65536;
+          retryCount++;
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (!updatedTask) {
+      throw new ApiError(500, 'Failed to update task after multiple retries');
+    }
+
+    // If we moved to a different column, update the source column tasks
+    if (isMovingColumn) {
+      await Task.updateMany(
+        { 
+          columnId: task.columnId,
+          order: { $gt: task.order }
+        },
+        { $inc: { order: -1 } }
+      );
+    }
+
+    // Check if rebalancing is needed
+    const needsRebalancing = await this.checkIfRebalancingNeeded(targetColumnId);
+    if (needsRebalancing) {
+      await this.rebalanceColumn(targetColumnId);
+    }
+
+    // Return task with column information
+    const taskWithColumn = await Task.findById(taskId).populate('columnId', 'title');
+    if (!taskWithColumn) {
+      throw new ApiError(500, 'Failed to retrieve updated task');
+    }
+
+    return taskWithColumn;
+  }
+
+  private async checkIfRebalancingNeeded(columnId: string): Promise<boolean> {
+    const tasks = await Task.find({ 
+      columnId: new Types.ObjectId(columnId) 
+    }).sort({ order: 1 });
+
+    if (tasks.length < 2) return false;
+
+    const minGap = 1000;
+    for (let i = 1; i < tasks.length; i++) {
+      if (tasks[i].order - tasks[i - 1].order < minGap) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private async rebalanceColumn(columnId: string): Promise<void> {
+    const tasks = await Task.find({ 
+      columnId: new Types.ObjectId(columnId) 
+    }).sort({ order: 1 });
+
+    const orderUpdates = tasks.map((task, index) => ({
+      updateOne: {
+        filter: { _id: task._id },
+        update: { $set: { order: (index + 1) * 65536 } }
+      }
+    }));
+
+    if (orderUpdates.length > 0) {
+      await Task.bulkWrite(orderUpdates);
+    }
   }
 }
 
