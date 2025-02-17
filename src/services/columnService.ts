@@ -90,11 +90,9 @@ class ColumnService {
       throw new ApiError(404, 'Column not found');
     }
 
-    // Delete the column and its associated tasks
     await Column.deleteOne({ _id: id });
     await Task.deleteMany({ columnId: new Types.ObjectId(id) });
     
-    // Update order of remaining columns
     await Column.updateMany(
       { order: { $gt: column.order } },
       { $inc: { order: -1 } }

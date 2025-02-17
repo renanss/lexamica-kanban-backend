@@ -112,13 +112,11 @@ class TaskService {
   }
 
   async createTask(taskData: ITaskCreate): Promise<ITask> {
-    // Check if column exists
     const column = await Column.findById(taskData.columnId);
     if (!column) {
       throw new ApiError(404, 'Column not found');
     }
 
-    // Get last task order in the column
     const lastTask = await Task.findOne({ columnId: taskData.columnId })
       .sort({ order: -1 })
       .limit(1);
@@ -133,7 +131,6 @@ class TaskService {
 
     await task.save();
 
-    // Return task with column information
     const taskWithColumn = await Task.findById(task._id).populate('columnId', 'title');
     if (!taskWithColumn) {
       throw new ApiError(500, 'Failed to create task');
@@ -159,7 +156,6 @@ class TaskService {
     if (!task) {
       throw new ApiError(404, 'Task not found');
     }
-
     return task;
   }
 
@@ -169,12 +165,10 @@ class TaskService {
       throw new ApiError(404, 'Task not found');
     }
 
-    // Store task info before deletion
     const taskInfo = task.toObject();
 
     await Task.findOneAndDelete({ _id: id });
 
-    // Update order of remaining tasks in the column
     await Task.updateMany(
       { 
         columnId: task.columnId,
@@ -187,6 +181,7 @@ class TaskService {
   }
 
   async moveTask(taskId: string, { targetColumnId, order }: ITaskMove): Promise<ITask> {
+    
     const [task, targetColumn] = await Promise.all([
       Task.findById(taskId),
       Column.findById(targetColumnId)
@@ -200,36 +195,39 @@ class TaskService {
       throw new ApiError(404, 'Target column not found');
     }
 
-    // Update orders in source column
-    await Task.updateMany(
-      { 
-        columnId: task.columnId,
-        order: { $gt: task.order }
-      },
-      { $inc: { order: -1 } }
-    );
-
-    // Update orders in target column
-    await Task.updateMany(
-      {
+    try {
+      const affectedTasks = await Task.find({
         columnId: new Types.ObjectId(targetColumnId),
-        order: { $gte: order }
-      },
-      { $inc: { order: 1 } }
-    );
+        order: { $gte: order },
+        _id: { $ne: taskId }
+      }).sort({ order: -1 });
+      
+      await affectedTasks.reduce<Promise<void>>(async (promise, affectedTask) => {
+        await promise;
+        const newOrder = affectedTask.order + (task.order === affectedTask.order + 1 ? 2 : 1);
+        
+        await Task.findByIdAndUpdate(affectedTask._id, {
+          $set: { order: newOrder }
+        });
+      }, Promise.resolve());
 
-    // Update the task itself
-    task.columnId = new Types.ObjectId(targetColumnId);
-    task.order = order;
-    await task.save();
+      await Task.findByIdAndUpdate(taskId, {
+        columnId: new Types.ObjectId(targetColumnId),
+        order: order
+      });
 
-    const updatedTask = await Task.findById(taskId).populate('columnId', 'title');
-    if (!updatedTask) {
-      throw new ApiError(500, 'Failed to update task');
+      const updatedTask = await Task.findById(taskId).populate('columnId', 'title');
+      if (!updatedTask) {
+        throw new ApiError(500, 'Failed to retrieve updated task');
+      }
+
+      return updatedTask;
+    } catch (error) {
+      console.error('Failed to move task:', error);
+      throw new ApiError(500, 'Failed to move task');
     }
-
-    return updatedTask;
   }
+
 }
 
 export default new TaskService(); 

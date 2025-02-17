@@ -25,7 +25,6 @@ const validate = (schema: ValidationSchema) => (
     return next(new ApiError(400, errorMessage));
   }
   
-  // Assign validated data to request
   Object.assign(req, value);
   return next();
 };

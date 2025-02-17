@@ -43,9 +43,30 @@ taskSchema.index({ columnId: 1, order: 1 }, { unique: true });
 // Text index for search functionality
 taskSchema.index({ title: 'text', description: 'text' });
 
-// Middleware to emit WebSocket events
+taskSchema.pre('save', function(next) {
+  if (this.isNew) {
+    return next();
+  }
+  // @ts-expect-error - _original property is dynamically added
+  this._original = {
+    columnId: this.columnId,
+    order: this.order
+  };
+  next();
+});
+
 taskSchema.post('save', function(doc) {
-  wsServer.broadcast('task:created', doc);
+  // @ts-expect-error - _original property is dynamically added
+  if (!doc._original) {
+    wsServer.broadcast('task:created', doc);
+  } else {
+    // @ts-expect-error - _original propertyis dynamically added
+    if (!doc._original.columnId.equals(doc.columnId)) {
+      wsServer.broadcast('task:moved', doc);
+    } else {
+      wsServer.broadcast('task:updated', doc);
+    }
+  }
 });
 
 taskSchema.post('findOneAndUpdate', function(doc) {
